@@ -1,0 +1,4 @@
+deploy/compose/volumes/
+notebooks/.ipynb_checkpoints
+.env
+.runtime/

@@ -1,0 +1,146 @@
+name: Deploy and Test
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-notebook:
+    runs-on: arc-runners-org-nvidia-ai-bp-1-gpu
+    env:
+      PYTHON_VERSION: 3.12
+    steps:  
+      - name: Checkout BP repository
+        uses: actions/checkout@v3
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jupyterlab nbconvert
+          pip install papermill
+          pip install ipywidgets
+          pip install torch
+          pip install --upgrade pip ipython ipykernel
+          ipython kernel install --name "python3" --user
+          # Install wget
+          sudo apt-get update
+          sudo apt-get install wget
+          # Install Docker and Docker Compose in a single step
+          curl -fsSL https://get.docker.com -o get-docker.sh
+          sudo sh get-docker.sh
+          sudo apt-get update
+          sudo apt-get install -y docker-compose-plugin docker-compose build-essential
+          # Get System Info
+          echo "===================== System Info ====================="
+          more /etc/os-release
+          docker version
+          docker compose version
+          
+      - name: Checkout Test repository
+        uses: actions/checkout@v3
+        with:
+          repository: 'NVIDIA-AI-Blueprints/blueprint-github-test'
+          token: ${{ secrets.BLUEPRINT_GITHUB_TEST }}
+          path: blueprint-github-test2
+
+      - name: Setup Blueprint
+        env:
+          NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NGC_API_KEY }}
+          NGC_CLI_API_KEY: ${{ secrets.NGC_API_KEY }}
+          REPO_ROOT: ${{ env.REPO_ROOT_ENV }}
+        run: |
+          export REPO_ROOT=$(git rev-parse --show-toplevel)
+          echo "${NGC_API_KEY}" | docker login nvcr.io -u '$oauthtoken' --password-stdin
+          cd $REPO_ROOT
+          ./data/download.sh ./data/list_manuals.txt
+          docker compose -f deploy/compose/docker-compose.yaml up -d
+          cd blueprint-github-test2/deploy
+          chmod 777 check_containers.sh
+          ./check_containers.sh
+          
+      - name: Run Jupyter Notebook
+        run: |
+          INGEST_NOTEBOOK_PATH="ingest_data.ipynb"
+          INGEST_OUTPUT_NOTEBOOK="ingest_data_result.ipynb"
+          API_NOTEBOOK_PATH="api_usage.ipynb"
+          API_OUTPUT_NOTEBOOK="api_usage_result.ipynb"          
+          cd notebooks
+          papermill "$INGEST_NOTEBOOK_PATH" "$INGEST_OUTPUT_NOTEBOOK" --log-output --log-level DEBUG
+          papermill "$API_NOTEBOOK_PATH" "$API_OUTPUT_NOTEBOOK" --log-output --log-level DEBUG
+
+      - name: Convert result to html format
+        if: always()
+        run: |
+          INGEST_OUTPUT_NOTEBOOK="ingest_data_result.ipynb"
+          API_OUTPUT_NOTEBOOK="api_usage_result.ipynb"     
+          cd notebooks
+          jupyter nbconvert --to html "$INGEST_OUTPUT_NOTEBOOK"
+          jupyter nbconvert --to html "$API_OUTPUT_NOTEBOOK"
+          
+
+      - name: Run Test Code
+        env:
+          TEST_DOCKER_PULL_KEY: ${{ secrets.TEST_DOCKER_PULL_KEY }}
+        run: |
+          echo "======================================="
+          echo "$TEST_DOCKER_PULL_KEY" |docker login nvcr.io --username  '$oauthtoken' --password-stdin 
+          docker run \
+            --net=host \
+            -v ./notebooks/api_usage_result.html:/app/input/aiva/api_usage.html \
+            -v ./notebooks/ingest_data_result.html:/app/input/aiva/ingest_data.html \
+            -v "$(pwd):/workspace" \
+            nvcr.io/rw983xdqtcdp/auto_test_team/blueprint-github-test-image:latest \
+            pytest -m aiva --aiva-generating-timeout-ms 180000  --disable-warnings --html=/workspace/aiva.html --self-contained-html
+          
+      - name: Upload the result notebook as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: result notebook and pytest
+          path: |
+             notebooks/ingest_data_result.html
+             notebooks/api_usage_result.html
+             aiva.html
+          retention-days: 30
+
+      - name: Set result output
+        id: set_result
+        if: always()  
+        run: |
+          echo "RESULT=$(if [ ${{ job.status }} == 'success' ]; then echo 'PASS'; else echo 'FAIL'; fi)" >> $GITHUB_OUTPUT
+   
+      - name: Send mail
+        uses: dawidd6/action-send-mail@6e71c855c9a091d80a519621b9fd3e8d252ca40c
+        if: always()
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          
+          # Email details
+          subject: "QA Test Workflow Result for ${{ github.repository }}"
+          to: Github-Action-Blueprint-QA@nvidia.com
+          from: github-workflow-notification@gmail.com
+          html_body: |
+            <p>Hello,</p>
+            
+            <p>The workflow for repository: <strong>${{ github.repository }}</strong> has completed.<br>
+            <strong>Result:</strong> ${{ steps.set_result.outputs.RESULT }}</p>
+            
+            <p>You can review the details on GitHub:<br>
+            <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}</a></p>
+            
+            <p>Thanks!</p>                
