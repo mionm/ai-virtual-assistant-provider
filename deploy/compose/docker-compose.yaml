@@ -51,7 +51,7 @@ services:
       # Set the default expiration time (TTL) for Redis keys (in seconds)
       REDIS_SESSION_EXPIRY: 12 # in hours
     ports:
-    - "8081:8081"
+    - "${AGENT_CHAIN_PORT:-8081}:8081"
     expose:
     - "8081"
     shm_size: 5gb
@@ -72,7 +72,7 @@ services:
     image: nvcr.io/nvidia/blueprint/aiva-customer-service-api-gateway:1.1.0
     command: --port 9000 --host 0.0.0.0 --workers 1
     ports:
-      - "9000:9000"
+      - "${API_GATEWAY_PORT:-9000}:9000"
     environment:
       AGENT_SERVER_URL: ${AGENT_SERVER_URL:-http://agent-chain-server:8081}
       ANALYTICS_SERVER_URL: ${ANALYTICS_SERVER_URL:-http://analytics-server:8081}
@@ -87,7 +87,7 @@ services:
     environment:
       - INFERENCE_ORIGIN=http://api-gateway-server:9000
     ports:
-      - "3001:3001"
+      - "${UI_PORT:-3001}:3001"
     restart: unless-stopped  # Optional: Automatically restart the container unless it is stopped
     depends_on:
     - api-gateway-server
@@ -124,7 +124,7 @@ services:
       # Log level for server, supported level NOTSET, DEBUG, INFO, WARN, ERROR, CRITICAL
       LOGLEVEL: ${LOGLEVEL:-INFO}
     ports:
-    - "8082:8081"
+    - "${ANALYTICS_PORT:-8082}:8081"
     expose:
     - "8081"
     shm_size: 5gb
@@ -187,7 +187,7 @@ services:
       # Log level for server, supported level NOTSET, DEBUG, INFO, WARN, ERROR, CRITICAL
       LOGLEVEL: ${LOGLEVEL:-INFO}
     ports:
-    - "8086:8081"
+    - "${UNSTRUCTURED_RETRIEVER_PORT:-8086}:8081"
     expose:
     - "8081"
     shm_size: 5gb
@@ -228,7 +228,7 @@ services:
       CSV_NAME: PdM_machines
       LOGLEVEL: ${LOGLEVEL:-INFO}
     ports:
-    - "8087:8081"
+    - "${STRUCTURED_RETRIEVER_PORT:-8087}:8081"
     expose:
     - "8081"
     shm_size: 5gb
@@ -262,7 +262,7 @@ services:
        - ./init-scripts:/docker-entrypoint-initdb.d  # Mount initialization scripts
        - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "sh -c 'pg_isready -U postgres -d postgres'"]
       interval: 10s
@@ -293,7 +293,7 @@ services:
     image: redis:7.0.13
     restart: always
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
        - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/redis-data:/data
 
@@ -302,7 +302,7 @@ services:
     image: rediscommander/redis-commander:latest
     restart: always
     ports:
-      - "9092:8081"
+      - "${REDIS_COMMANDER_PORT:-9092}:8081"
     environment:
       - REDIS_HOSTS=local:redis:6379
 
@@ -334,8 +334,8 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
     ports:
-      - "9011:9011"
-      - "9010:9010"
+      - "${MINIO_CONSOLE_PORT:-9011}:9011"
+      - "${MINIO_PORT:-9010}:9010"
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
     command: minio server /minio_data --console-address ":9011" --address ":9010"
@@ -356,8 +356,8 @@ services:
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
     ports:
-      - "19530:19530"
-      - "9091:9091"
+      - "${MILVUS_PORT:-19530}:19530"
+      - "${MILVUS_HEALTH_PORT:-9091}:9091"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s
