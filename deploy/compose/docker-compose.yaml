@@ -36,8 +36,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       # Postgres database name for customer data
-      POSTGRES_USER_READONLY: ${POSTGRES_USER:-postgres_readonly}
-      POSTGRES_PASSWORD_READONLY: ${POSTGRES_PASSWORD:-readonly_password}
+      POSTGRES_USER_READONLY: ${POSTGRES_USER_READONLY:-postgres_readonly}
+      POSTGRES_PASSWORD_READONLY: ${POSTGRES_PASSWORD_READONLY:-readonly_password}
       CUSTOMER_DATA_DB: ${CUSTOMER_DATA_DB:-customer_data}
       CANONICAL_RAG_URL: http://unstructured-retriever:8081
       STRUCTURED_RAG_URI: http://structured-retriever:8081
@@ -86,6 +86,9 @@ services:
     container_name: agent-frontend
     environment:
       - INFERENCE_ORIGIN=http://api-gateway-server:9000
+    volumes:
+      - ../../data/gear-store.csv:/app/public/gear-store.csv:ro
+      - ../../data/orders.csv:/app/public/orders.csv:ro
     ports:
       - "${UI_PORT:-3001}:3001"
     restart: unless-stopped  # Optional: Automatically restart the container unless it is stopped
@@ -260,11 +263,12 @@ services:
       - "max_connections=200"
     volumes:
        - ./init-scripts:/docker-entrypoint-initdb.d  # Mount initialization scripts
+       - ../../data/orders.csv:/docker-entrypoint-initdb.d/orders.csv:ro
        - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/postgres_data:/var/lib/postgresql/data
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "sh -c 'pg_isready -U postgres -d postgres'"]
+      test: ["CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-customer_data}'"]
       interval: 10s
       timeout: 3s
       retries: 3

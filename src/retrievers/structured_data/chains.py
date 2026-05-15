@@ -83,13 +83,13 @@ class CSVChatbot(BaseExample):
                 (result_df is None)
                 ):
                 logger.warning("Retrieval failed to get any relevant context")
-                raise Exception("No response generated from LLM.")
+                return [{"content": "No records found for the specified criteria."}]
 
             result_df = str(result_df).strip()
             return [{"content": result_df}]
         except Exception as e:
             logger.error("An error occurred during document search: %s", str(e))
-            raise  # Re-raise the exception after logging
+            return [{"content": f"Error: {e}"}]
 
     def get_documents(self) -> List[str]:
         """Retrieves filenames stored in the vector store."""

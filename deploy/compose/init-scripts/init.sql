@@ -1,5 +1,12 @@
--- Create a new read-only user
-CREATE USER "postgres_readonly" WITH PASSWORD 'readonly_password';
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'postgres_readonly') THEN
+        CREATE USER postgres_readonly WITH PASSWORD 'readonly_password';
+    ELSE
+        ALTER USER postgres_readonly WITH PASSWORD 'readonly_password';
+    END IF;
+END
+$$;
 
 -- Grant CONNECT permission to the database
 GRANT CONNECT ON DATABASE customer_data TO "postgres_readonly";
