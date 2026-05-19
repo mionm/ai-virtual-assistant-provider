@@ -305,10 +305,10 @@ class PostgresClient:
         """Use this to retrieve the user's purchase history."""
 
         # TODO: Add filter logic based on time. Like product pruchased in last 5 days
-        SQL_QUERY = f"""
+        SQL_QUERY = """
         SELECT *
         FROM customer_data
-        WHERE customer_id={user_id};
+        WHERE customer_id=%s;
         """
         host, port = settings.database.url.split(":")
 
@@ -323,7 +323,7 @@ class PostgresClient:
         # Using context manager for connection and cursor
         with psycopg2.connect(**db_params) as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                cur.execute(SQL_QUERY)
+                cur.execute(SQL_QUERY, (user_id,))
                 result = cur.fetchall()
 
         # Returning result as a list of dictionaries
