@@ -70,7 +70,7 @@ reserve_port() {
 }
 
 USED_PORTS=""
-reserve_port UI_PORT 6000
+reserve_port UI_PORT 6020
 reserve_port API_GATEWAY_PORT 6001
 reserve_port AGENT_CHAIN_PORT 6002
 reserve_port ANALYTICS_PORT 6003
