@@ -20,6 +20,12 @@ limitations under the License.
 
 > **Deprecation notice (Apr 2026):** This project is **deprecated**. It is no longer actively maintained, and new production use is not recommended. The blueprint is retained for reference only.
 
+## AI Hub Port Range
+
+For AI Hub installs, host ports are allocated inside `6000-6050` so repeated provider installs do not collide with the Hub shell or other local services. Fresh clones use these defaults from `.env.example`, and `start.sh` resolves busy ports inside the same range before writing the selected map to `.runtime/ports.env`.
+
+Hosted API mode remains the default path. Local NIM/GPU mode is optional and should only be enabled on machines with a compatible NVIDIA runtime; AMD and Windows machines can keep `USE_LOCAL_NIM=false`.
+
 ## Table of Contents
 - [Table of Contents](#table-of-contents)
 - [Overview](#overview)

@@ -25,10 +25,14 @@ fi
 
 find_free_port() {
   local start_port="$1"
-  python3 - "$start_port" <<'PY'
+  python3 - "$start_port" 6050 "${USED_PORTS:-}" <<'PY'
 import socket, sys
 p0=int(sys.argv[1])
-for p in range(p0, 65535):
+max_port=int(sys.argv[2])
+used={int(p) for p in sys.argv[3].split(",") if p}
+for p in range(p0, max_port + 1):
+    if p in used:
+        continue
     s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
     try:
         s.bind(("127.0.0.1", p))
@@ -41,9 +45,45 @@ for p in range(p0, 65535):
 PY
 }
 
-UI_PORT="$(find_free_port 3001)"
-API_GATEWAY_PORT="$(find_free_port 9000)"
-PGADMIN_PORT="$(find_free_port 5050)"
+reserve_port() {
+  local var_name="$1"
+  local default_port="$2"
+  local current_port="${!var_name:-$default_port}"
+
+  if [[ ! "$current_port" =~ ^[0-9]+$ || "$current_port" -lt 6000 || "$current_port" -gt 6050 ]]; then
+    current_port="$default_port"
+  fi
+
+  local resolved_port
+  resolved_port="$(find_free_port "$current_port")"
+  if [[ -z "$resolved_port" ]]; then
+    echo "Error: no free port available in AI Hub range 6000-6050 for ${var_name}" >&2
+    exit 1
+  fi
+
+  export "${var_name}=${resolved_port}"
+  if [[ -n "${USED_PORTS:-}" ]]; then
+    USED_PORTS="${USED_PORTS},${resolved_port}"
+  else
+    USED_PORTS="${resolved_port}"
+  fi
+}
+
+USED_PORTS=""
+reserve_port UI_PORT 6000
+reserve_port API_GATEWAY_PORT 6001
+reserve_port AGENT_CHAIN_PORT 6002
+reserve_port ANALYTICS_PORT 6003
+reserve_port UNSTRUCTURED_RETRIEVER_PORT 6004
+reserve_port STRUCTURED_RETRIEVER_PORT 6005
+reserve_port POSTGRES_PORT 6006
+reserve_port REDIS_PORT 6007
+reserve_port REDIS_COMMANDER_PORT 6008
+reserve_port MINIO_PORT 6009
+reserve_port MINIO_CONSOLE_PORT 6010
+reserve_port MILVUS_PORT 6011
+reserve_port MILVUS_HEALTH_PORT 6012
+reserve_port PGADMIN_PORT 6013
 
 cat > .runtime/docker-compose.override.yaml <<EOF
 services:
@@ -112,6 +152,17 @@ fi
 cat > .runtime/ports.env <<EOF
 UI_PORT=${UI_PORT}
 API_GATEWAY_PORT=${API_GATEWAY_PORT}
+AGENT_CHAIN_PORT=${AGENT_CHAIN_PORT}
+ANALYTICS_PORT=${ANALYTICS_PORT}
+UNSTRUCTURED_RETRIEVER_PORT=${UNSTRUCTURED_RETRIEVER_PORT}
+STRUCTURED_RETRIEVER_PORT=${STRUCTURED_RETRIEVER_PORT}
+POSTGRES_PORT=${POSTGRES_PORT}
+REDIS_PORT=${REDIS_PORT}
+REDIS_COMMANDER_PORT=${REDIS_COMMANDER_PORT}
+MINIO_PORT=${MINIO_PORT}
+MINIO_CONSOLE_PORT=${MINIO_CONSOLE_PORT}
+MILVUS_PORT=${MILVUS_PORT}
+MILVUS_HEALTH_PORT=${MILVUS_HEALTH_PORT}
 PGADMIN_PORT=${PGADMIN_PORT}
 EOF
 
@@ -119,4 +170,5 @@ echo "[ai-virtual-assistant] Started."
 echo "[ai-virtual-assistant] UI: http://127.0.0.1:${UI_PORT}"
 echo "[ai-virtual-assistant] API Gateway: http://127.0.0.1:${API_GATEWAY_PORT}"
 echo "[ai-virtual-assistant] PgAdmin: http://127.0.0.1:${PGADMIN_PORT}"
+echo "[ai-virtual-assistant] Ports saved to .runtime/ports.env"
 echo "[ai-virtual-assistant] Logs: docker compose -f deploy/compose/docker-compose.yaml -f .runtime/docker-compose.override.yaml logs -f"
